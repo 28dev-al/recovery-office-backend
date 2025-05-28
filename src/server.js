@@ -80,12 +80,16 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
     
-    const allowedOrigins = [
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : [
       'http://localhost:3000',
       'http://localhost:3001', 
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001',
-      'https://recovery28.netlify.app'
+      'https://recovery-office-online.netlify.app',
+      'https://recovery-office.com',
+      'https://www.recovery-office.com'
     ];
     
     console.log(`[CORS] Checking origin: ${origin}`);
@@ -150,7 +154,9 @@ app.use((req, res, next) => {
     'http://localhost:3001', 
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
-    'https://recovery28.netlify.app'
+    'https://recovery-office.com',    
+    'https://recovery-office-online.netlify.app',
+    'https://www.recovery-office.com'    
   ];
   
   if (origin && allowedOrigins.includes(origin)) {
