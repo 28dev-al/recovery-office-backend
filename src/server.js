@@ -154,8 +154,8 @@ app.use((req, res, next) => {
     'http://localhost:3001', 
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
-    'https://recovery-office.com',    
     'https://recovery-office-online.netlify.app',
+    'https://recovery-office.com',
     'https://www.recovery-office.com'    
   ];
   

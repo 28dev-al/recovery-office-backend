@@ -81,8 +81,11 @@ exports.registerClient = async (req, res, next) => {
     console.log('[Client Controller] Client created successfully:', client._id);
 
     return res.status(201).json({
-      status: 'success',
-      data: client
+      success: true,
+      data: {
+        _id: client._id,
+        ...client.toObject()
+      }
     });
   } catch (err) {
     console.error('[Client Controller] Error creating client:', err);

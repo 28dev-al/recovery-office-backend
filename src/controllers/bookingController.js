@@ -250,8 +250,12 @@ exports.createBooking = async (req, res, _next) => {
     }
 
     return res.status(201).json({
-      status: 'success',
-      data: savedBooking,
+      success: true,
+      data: {
+        _id: savedBooking._id,
+        reference: savedBooking.reference,
+        ...savedBooking.toObject()
+      },
       message: 'Booking created successfully'
     });
   } catch (error) {

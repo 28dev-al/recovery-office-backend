@@ -242,4 +242,41 @@ exports.validateRefreshToken = (req, res, next) => {
   }
   
   next();
+};
+
+/**
+ * Validate booking update request
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ * @returns {void}
+ */
+exports.validateBookingUpdate = (req, res, next) => {
+  const schema = Joi.object({
+    status: Joi.string().valid('pending', 'confirmed', 'cancelled', 'completed', 'no-show').optional(),
+    cancellationReason: Joi.string().max(200).allow('', null).optional().messages({
+      'string.max': 'Cancellation reason cannot exceed 200 characters'
+    }),
+    notes: Joi.string().max(500).allow('', null).optional().messages({
+      'string.max': 'Notes cannot exceed 500 characters'
+    }),
+    paymentStatus: Joi.string().valid('unpaid', 'paid', 'refunded', 'partial').optional(),
+    urgencyLevel: Joi.string().valid('standard', 'urgent', 'emergency').optional(),
+    estimatedValue: Joi.number().min(0).max(100000000).allow(null).optional().messages({
+      'number.min': 'Estimated value cannot be negative',
+      'number.max': 'Please contact us directly for amounts over £100M'
+    })
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) {
+    return res.status(400).json({
+      status: 'error',
+      message: error.details[0].message,
+      code: 'VALIDATION_ERROR'
+    });
+  }
+
+  next();
 }; 

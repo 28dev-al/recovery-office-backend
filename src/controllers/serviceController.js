@@ -71,11 +71,7 @@ exports.getAllServices = async (req, res, next) => {
       hasDebugInfo: !!formattedServices[0]?.debugInfo
     });
 
-    return res.status(200).json({
-      status: 'success',
-      results: formattedServices.length,
-      data: formattedServices
-    });
+    return res.status(200).json(formattedServices);
   } catch (err) {
     console.error('🚨 [Services API] Error:', err);
     next(err);
