@@ -1,21 +1,32 @@
-const { ObjectId } = require('mongodb');
+const Booking = require('../models/Booking');
+const Client = require('../models/Client');
+const Service = require('../models/Service');
 
 const dashboardController = {
-  // GET /api/dashboard/analytics - Overview statistics
+  // GET /api/dashboard/analytics - FIXED VERSION
   getOverviewStats: async (req, res) => {
     try {
-      console.log('[Dashboard Controller] Fetching overview stats...');
-
-      const db = req.app.locals.db || global.db;
+      console.log('[Dashboard Controller] Fetching overview stats using Mongoose...');
       
-      // Get collections data
-      const [bookings, clients, services] = await Promise.all([
-        db.collection('bookings').find({}).toArray(),
-        db.collection('clients').find({}).toArray(),
-        db.collection('services').find({}).toArray()
-      ]);
+      // Use Mongoose models instead of req.app.locals.db
+      const bookings = await Booking.find().lean().catch(err => {
+        console.error('[Dashboard] Booking find error:', err);
+        return [];
+      });
+      
+      const clients = await Client.find().lean().catch(err => {
+        console.error('[Dashboard] Client find error:', err);
+        return [];
+      });
+      
+      const services = await Service.find().lean().catch(err => {
+        console.error('[Dashboard] Service find error:', err);
+        return [];
+      });
 
-      // Calculate real statistics
+      console.log(`[Dashboard] Found ${bookings.length} bookings, ${clients.length} clients, ${services.length} services`);
+
+      // Calculate statistics
       const totalBookings = bookings.length;
       const totalRevenue = bookings.reduce((sum, booking) => {
         return sum + (booking.price || booking.totalAmount || 0);
@@ -27,8 +38,6 @@ const dashboardController = {
       
       const completedBookings = bookings.filter(b => b.status === 'completed').length;
       const successRate = totalBookings > 0 ? (completedBookings / totalBookings) * 100 : 0;
-      
-      const averageBookingValue = totalBookings > 0 ? totalRevenue / totalBookings : 0;
 
       const response = {
         status: 'success',
@@ -37,9 +46,8 @@ const dashboardController = {
           totalRevenue,
           activeClients,
           successRate,
-          averageBookingValue,
-          todayBookings: 0, // Would need date filtering for real calculation
-          weekBookings: 0,
+          averageBookingValue: totalBookings > 0 ? totalRevenue / totalBookings : 0,
+          todayBookings: 0,
           statusBreakdown: bookings.reduce((acc, booking) => {
             const status = booking.status || 'pending';
             acc[status] = (acc[status] || 0) + 1;
@@ -61,19 +69,20 @@ const dashboardController = {
     }
   },
 
-  // GET /api/dashboard/bookings - Recent bookings
+  // GET /api/dashboard/bookings - FIXED VERSION
   getRecentBookings: async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;
-      console.log(`[Dashboard Controller] Fetching ${limit} recent bookings...`);
-
-      const db = req.app.locals.db || global.db;
+      console.log(`[Dashboard Controller] Fetching ${limit} recent bookings using Mongoose...`);
       
-      const bookings = await db.collection('bookings')
-        .find({})
+      const bookings = await Booking.find()
         .sort({ createdAt: -1 })
         .limit(limit)
-        .toArray();
+        .lean()
+        .catch(err => {
+          console.error('[Dashboard] Recent bookings error:', err);
+          return [];
+        });
 
       const formattedBookings = bookings.map(booking => ({
         _id: booking._id,
@@ -81,7 +90,7 @@ const dashboardController = {
         clientName: booking.clientName || 
                    `${booking.firstName || ''} ${booking.lastName || ''}`.trim() ||
                    'Unknown Client',
-        serviceName: booking.serviceName || booking.service?.name || 'Unknown Service',
+        serviceName: booking.serviceName || 'Unknown Service',
         date: booking.selectedDate || booking.date || booking.createdAt,
         time: booking.selectedTimeSlot || booking.time || 'TBD',
         status: booking.status || 'pending',
@@ -107,18 +116,29 @@ const dashboardController = {
     }
   },
 
-  // GET /api/dashboard/activities - Recent activities
+  // GET /api/dashboard/activities - FIXED VERSION
   getRecentActivities: async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 20;
-      console.log(`[Dashboard Controller] Generating ${limit} recent activities...`);
-
-      const db = req.app.locals.db || global.db;
+      console.log(`[Dashboard Controller] Generating ${limit} recent activities using Mongoose...`);
       
-      const [recentBookings, recentClients] = await Promise.all([
-        db.collection('bookings').find({}).sort({ createdAt: -1 }).limit(10).toArray(),
-        db.collection('clients').find({}).sort({ createdAt: -1 }).limit(10).toArray()
-      ]);
+      const recentBookings = await Booking.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean()
+        .catch(err => {
+          console.error('[Dashboard] Activities bookings error:', err);
+          return [];
+        });
+      
+      const recentClients = await Client.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean()
+        .catch(err => {
+          console.error('[Dashboard] Activities clients error:', err);
+          return [];
+        });
 
       const activities = [];
 
@@ -168,17 +188,13 @@ const dashboardController = {
     }
   },
 
-  // GET /api/dashboard/analytics/dashboard - Analytics data
+  // GET /api/dashboard/analytics/dashboard - FIXED VERSION
   getAnalyticsData: async (req, res) => {
     try {
-      console.log('[Dashboard Controller] Fetching analytics data...');
-
-      const db = req.app.locals.db || global.db;
+      console.log('[Dashboard Controller] Fetching analytics data using Mongoose...');
       
-      const [bookings, services] = await Promise.all([
-        db.collection('bookings').find({}).toArray(),
-        db.collection('services').find({}).toArray()
-      ]);
+      const bookings = await Booking.find().lean().catch(() => []);
+      const services = await Service.find().lean().catch(() => []);
 
       // Generate service popularity
       const serviceStats = services.map(service => {
@@ -227,17 +243,13 @@ const dashboardController = {
     }
   },
 
-  // GET /api/dashboard/analytics/service-popularity
+  // GET /api/dashboard/analytics/service-popularity - FIXED VERSION
   getServicePopularity: async (req, res) => {
     try {
-      console.log('[Dashboard Controller] Fetching service popularity...');
-
-      const db = req.app.locals.db || global.db;
+      console.log('[Dashboard Controller] Fetching service popularity using Mongoose...');
       
-      const [bookings, services] = await Promise.all([
-        db.collection('bookings').find({}).toArray(),
-        db.collection('services').find({}).toArray()
-      ]);
+      const bookings = await Booking.find().lean().catch(() => []);
+      const services = await Service.find().lean().catch(() => []);
 
       const servicePopularity = services.map(service => {
         const serviceBookings = bookings.filter(booking => 
@@ -275,5 +287,4 @@ const dashboardController = {
   }
 };
 
-// CRITICAL: Export the controller properly
 module.exports = dashboardController; 

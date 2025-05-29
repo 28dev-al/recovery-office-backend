@@ -12,169 +12,78 @@ const logger = require('../utils/logger');
 const dashboardController = require('../controllers/dashboardController');
 
 /**
- * Get dashboard analytics and statistics (Main endpoint)
- * GET /api/dashboard/analytics
+ * Dashboard controller-based routes (using Mongoose models)
  */
 router.get('/analytics', dashboardController.getOverviewStats);
-
-/**
- * Get all bookings for dashboard table
- * GET /api/dashboard/bookings
- */
 router.get('/bookings', dashboardController.getRecentBookings);
-
-/**
- * Get recent activities for dashboard feed
- * GET /api/dashboard/activities
- */
 router.get('/activities', dashboardController.getRecentActivities);
-
-/**
- * Get analytics data for charts
- * GET /api/dashboard/analytics/dashboard
- */
 router.get('/analytics/dashboard', dashboardController.getAnalyticsData);
-
-/**
- * Get service popularity data
- * GET /api/dashboard/analytics/service-popularity
- */
 router.get('/analytics/service-popularity', dashboardController.getServicePopularity);
 
 /**
- * Get service statistics for dashboard (Legacy endpoint - using Mongoose)
- * GET /api/dashboard/service-stats
+ * Additional dashboard routes
  */
-router.get('/service-stats', async (req, res) => {
+
+// GET /api/dashboard/clients - Fetches clients data directly
+router.get('/clients', async (req, res) => {
   try {
-    console.log('[Dashboard API] Calculating service statistics...');
-
-    const [services, bookings] = await Promise.all([
-      Service.find({}).exec(),
-      Booking.find({}).populate('serviceId').exec()
-    ]);
-
-    // Calculate stats per service
-    const serviceStats = services.map(service => {
-      const serviceBookings = bookings.filter(b => 
-        b.serviceId && b.serviceId._id.toString() === service._id.toString()
-      );
-      
-      const revenue = serviceBookings.reduce((sum, booking) => 
-        sum + (booking.estimatedValue || service.price || 0), 0
-      );
-
-      return {
-        _id: service._id,
-        name: service.name,
-        price: service.price,
-        bookingCount: serviceBookings.length,
-        revenue: revenue,
-        averageValue: serviceBookings.length > 0 ? revenue / serviceBookings.length : 0,
-        isActive: service.isActive !== false
-      };
-    });
-
-    console.log(`[Dashboard API] Service stats calculated for ${serviceStats.length} services`);
-
+    const Client = require('../models/Client');
+    const clients = await Client.find().limit(parseInt(req.query.limit) || 20).lean();
     res.json({
       status: 'success',
-      data: serviceStats
+      data: clients
     });
   } catch (error) {
-    console.error('[Dashboard API] Error calculating service stats:', error);
-    logger.error('Dashboard service stats calculation failed', { error: error.message });
-    
+    console.error('[Dashboard Routes] Error fetching clients:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Failed to calculate service statistics',
+      message: 'Failed to fetch clients for dashboard',
       error: error.message
     });
   }
 });
 
-/**
- * Get client statistics for dashboard (Legacy endpoint - using Mongoose)
- * GET /api/dashboard/client-stats
- */
-router.get('/client-stats', async (req, res) => {
-  try {
-    console.log('[Dashboard API] Calculating client statistics...');
+// GET /api/dashboard/stream - Server-Sent Events endpoint
+router.get('/stream', (req, res) => {
+  // Set headers for Server-Sent Events
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
 
-    const clients = await Client.find({}).exec();
-    
-    // Calculate client metrics
-    const totalClients = clients.length;
-    const totalEstimatedLoss = clients.reduce((sum, client) => sum + (client.estimatedLoss || 0), 0);
-    const averageLoss = totalClients > 0 ? totalEstimatedLoss / totalClients : 0;
-    
-    // Group by case type
-    const caseTypeBreakdown = clients.reduce((acc, client) => {
-      const caseType = client.caseType || 'unknown';
-      acc[caseType] = (acc[caseType] || 0) + 1;
-      return acc;
-    }, {});
+  // Send initial connection message
+  res.write('data: {"type":"connected","message":"Dashboard stream connected"}\n\n');
 
-    // Group by urgency level
-    const urgencyBreakdown = clients.reduce((acc, client) => {
-      const urgency = client.urgencyLevel || 'standard';
-      acc[urgency] = (acc[urgency] || 0) + 1;
-      return acc;
-    }, {});
+  // Keep connection alive with periodic heartbeat
+  const heartbeatInterval = setInterval(() => {
+    res.write(`data: {"type":"heartbeat","timestamp":"${new Date().toISOString()}"}\n\n`);
+  }, 30000);
 
-    const clientStats = {
-      totalClients,
-      totalEstimatedLoss: Math.round(totalEstimatedLoss),
-      averageLoss: Math.round(averageLoss),
-      caseTypeBreakdown,
-      urgencyBreakdown,
-      recentClients: clients
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 5)
-        .map(client => ({
-          _id: client._id,
-          name: `${client.firstName} ${client.lastName}`,
-          caseType: client.caseType,
-          estimatedLoss: client.estimatedLoss,
-          createdAt: client.createdAt
-        }))
-    };
-
-    console.log(`[Dashboard API] Client stats calculated: ${totalClients} total clients`);
-
-    res.json({
-      status: 'success',
-      data: clientStats
-    });
-  } catch (error) {
-    console.error('[Dashboard API] Error calculating client stats:', error);
-    logger.error('Dashboard client stats calculation failed', { error: error.message });
-    
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to calculate client statistics',
-      error: error.message
-    });
-  }
+  // Clean up on client disconnect
+  req.on('close', () => {
+    clearInterval(heartbeatInterval);
+    console.log('[Dashboard Stream] Client disconnected');
+    res.end();
+  });
 });
 
-/**
- * Health check for dashboard
- * GET /api/dashboard/health
- */
+// Health check
 router.get('/health', (req, res) => {
   res.json({
     status: 'success',
-    message: 'Dashboard API is healthy',
+    message: 'Dashboard API is healthy and using Mongoose controllers',
     timestamp: new Date().toISOString(),
     endpoints: [
       '/api/dashboard/analytics',
-      '/api/dashboard/bookings', 
+      '/api/dashboard/bookings',
       '/api/dashboard/activities',
       '/api/dashboard/analytics/dashboard',
       '/api/dashboard/analytics/service-popularity',
-      '/api/dashboard/service-stats',
-      '/api/dashboard/client-stats'
+      '/api/dashboard/clients',
+      '/api/dashboard/stream'
     ]
   });
 });
