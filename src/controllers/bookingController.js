@@ -205,7 +205,61 @@ exports.createBooking = async (req, res, _next) => {
       await savedBooking.save();
     }
 
-    // Send confirmation email (non-blocking)
+    console.log('[Booking Controller] Booking saved, sending emails...');
+
+    // Prepare comprehensive email data for professional templates
+    const clientEmailData = {
+      firstName: clientExists.firstName,
+      lastName: clientExists.lastName,
+      email: clientExists.email,
+      phone: clientExists.phone || '',
+      preferredContactMethod: clientExists.preferredContactMethod || 'Email',
+      caseType: clientExists.caseType || 'Not specified',
+      estimatedLoss: clientExists.estimatedLoss || 0,
+      notes: notes || ''
+    };
+
+    const bookingEmailData = {
+      reference: savedBooking.reference,
+      serviceName: savedBooking.serviceName,
+      date: savedBooking.date,
+      timeSlot: timeSlot || 'To be confirmed',
+      urgencyLevel: savedBooking.urgencyLevel
+    };
+
+    // Send professional client confirmation email (non-blocking)
+    try {
+      console.log('[Booking Controller] Sending professional client confirmation...');
+      const clientEmailResult = await emailService.sendNewBookingConfirmation(clientEmailData, bookingEmailData);
+      
+      if (clientEmailResult.success) {
+        savedBooking.confirmationSent = true;
+        await savedBooking.save({ validateBeforeSave: false });
+        console.log('✅ [Booking Controller] Client confirmation email sent successfully');
+      } else {
+        console.error('[Booking Controller] Client confirmation email failed:', clientEmailResult.error);
+      }
+    } catch (error) {
+      console.error('[Booking Controller] Error sending client confirmation email:', error.message);
+      // Don't fail the booking if email fails
+    }
+
+    // Send professional internal notification email (non-blocking)
+    try {
+      console.log('[Booking Controller] Sending professional internal notification...');
+      const internalEmailResult = await emailService.sendNewInternalNotification(clientEmailData, bookingEmailData);
+      
+      if (internalEmailResult.success) {
+        console.log('✅ [Booking Controller] Internal notification email sent successfully');
+      } else {
+        console.error('[Booking Controller] Internal notification email failed:', internalEmailResult.error);
+      }
+    } catch (error) {
+      console.error('[Booking Controller] Error sending internal notification email:', error.message);
+      // Don't fail the booking if notification fails
+    }
+
+    // Legacy email sending for backward compatibility (can be removed later)
     try {
       await emailService.sendBookingConfirmation(
         clientExists.email,
@@ -219,21 +273,18 @@ exports.createBooking = async (req, res, _next) => {
           recurrencePattern: savedBooking.recurrencePattern
         }
       );
-      
-      savedBooking.confirmationSent = true;
-      await savedBooking.save({ validateBeforeSave: false });
     } catch (error) {
-      console.error('[Booking Controller] Error sending confirmation email:', error.message);
-      // Don't fail the booking if email fails
+      console.error('[Booking Controller] Legacy email error (non-critical):', error.message);
     }
 
-    // Notify admin (non-blocking)
+    // Legacy admin notification (can be removed later)
     try {
       await emailService.sendAdminNotification(
         'New Booking',
         {
           clientName: `${clientExists.firstName} ${clientExists.lastName}`,
           clientEmail: clientExists.email,
+          clientPhone: clientExists.phone,
           serviceName: savedBooking.serviceName,
           date: new Date(date),
           timeSlot,
@@ -245,8 +296,7 @@ exports.createBooking = async (req, res, _next) => {
         }
       );
     } catch (error) {
-      console.error('[Booking Controller] Error sending admin notification:', error.message);
-      // Don't fail the booking if notification fails
+      console.error('[Booking Controller] Legacy admin notification error (non-critical):', error.message);
     }
 
     return res.status(201).json({
