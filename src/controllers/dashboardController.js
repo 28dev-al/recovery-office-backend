@@ -69,48 +69,132 @@ const dashboardController = {
     }
   },
 
-  // GET /api/dashboard/bookings - FIXED VERSION
+  // GET /api/dashboard/bookings - FIXED VERSION WITH CLIENT DATA POPULATION
   getRecentBookings: async (req, res) => {
     try {
       const limit = parseInt(req.query.limit) || 10;
-      console.log(`[Dashboard Controller] Fetching ${limit} recent bookings using Mongoose...`);
+      console.log(`[Dashboard Controller] Fetching ${limit} recent bookings with client data...`);
       
+      // Fetch bookings and populate client data
       const bookings = await Booking.find()
         .sort({ createdAt: -1 })
         .limit(limit)
-        .lean()
-        .catch(err => {
-          console.error('[Dashboard] Recent bookings error:', err);
-          return [];
+        .lean();
+
+      console.log(`[Dashboard Controller] Found ${bookings.length} bookings, populating client data...`);
+
+      // Manually populate client data for each booking
+      const bookingsWithClients = await Promise.all(
+        bookings.map(async (booking) => {
+          try {
+            // Find the client by clientId
+            const client = await Client.findById(booking.clientId).lean();
+            
+            console.log(`[Dashboard Controller] Booking ${booking._id} -> Client:`, client?.firstName, client?.lastName);
+            
+            return {
+              _id: booking._id,
+              id: booking._id.toString(),
+              
+              // CLIENT DATA - Multiple ways to access
+              clientId: booking.clientId,
+              clientName: client ? `${client.firstName} ${client.lastName}`.trim() : 'Client not found',
+              firstName: client?.firstName || '',
+              lastName: client?.lastName || '',
+              email: client?.email || '',
+              phone: client?.phone || '',
+              
+              // BOOKING DATA
+              serviceName: booking.serviceName || 'Unknown Service',
+              date: booking.date || booking.createdAt,
+              timeSlot: booking.timeSlot || 'Time not available',
+              time: booking.timeSlot || 'To be confirmed',
+              status: booking.status || 'pending',
+              urgencyLevel: booking.urgencyLevel || 'standard',
+              
+              // VALUE DATA
+              value: booking.estimatedValue || booking.price || booking.totalAmount || 0,
+              price: booking.estimatedValue || booking.price || booking.totalAmount || 0,
+              totalAmount: booking.estimatedValue || booking.price || booking.totalAmount || 0,
+              estimatedValue: booking.estimatedValue || 0,
+              
+              // ADDITIONAL DATA
+              reference: booking.reference,
+              notes: booking.notes || '',
+              paymentStatus: booking.paymentStatus || 'unpaid',
+              createdAt: booking.createdAt,
+              
+              // NESTED CLIENT OBJECT (for compatibility)
+              client: client ? {
+                _id: client._id,
+                name: `${client.firstName} ${client.lastName}`.trim(),
+                firstName: client.firstName,
+                lastName: client.lastName,
+                email: client.email,
+                phone: client.phone,
+                preferredContactMethod: client.preferredContactMethod
+              } : null,
+              
+              // CLIENT INFO OBJECT (alternative structure)
+              clientInfo: client ? {
+                name: `${client.firstName} ${client.lastName}`.trim(),
+                firstName: client.firstName,
+                lastName: client.lastName,
+                email: client.email,
+                phone: client.phone,
+                estimatedLoss: client.estimatedLoss || 0,
+                caseType: client.caseType,
+                notes: client.notes
+              } : null
+            };
+          } catch (clientError) {
+            console.error(`[Dashboard Controller] Error fetching client for booking ${booking._id}:`, clientError);
+            
+            return {
+              _id: booking._id,
+              id: booking._id.toString(),
+              clientId: booking.clientId,
+              clientName: 'Client data error',
+              serviceName: booking.serviceName || 'Unknown Service',
+              date: booking.date || booking.createdAt,
+              timeSlot: booking.timeSlot || 'Time not available',
+              time: booking.timeSlot || 'To be confirmed',
+              status: booking.status || 'pending',
+              value: booking.estimatedValue || 0,
+              price: booking.estimatedValue || 0,
+              urgencyLevel: booking.urgencyLevel || 'standard',
+              createdAt: booking.createdAt
+            };
+          }
+        })
+      );
+
+      console.log(`[Dashboard Controller] Successfully populated client data for ${bookingsWithClients.length} bookings`);
+
+      // Log sample data for debugging
+      if (bookingsWithClients.length > 0) {
+        console.log('[Dashboard Controller] Sample booking with client data:', {
+          _id: bookingsWithClients[0]._id,
+          clientName: bookingsWithClients[0].clientName,
+          firstName: bookingsWithClients[0].firstName,
+          lastName: bookingsWithClients[0].lastName,
+          email: bookingsWithClients[0].email,
+          phone: bookingsWithClients[0].phone,
+          serviceName: bookingsWithClients[0].serviceName,
+          value: bookingsWithClients[0].value
         });
+      }
 
-      const formattedBookings = bookings.map(booking => ({
-        _id: booking._id,
-        id: booking._id.toString(),
-        clientName: booking.clientName || 
-                   `${booking.firstName || ''} ${booking.lastName || ''}`.trim() ||
-                   'Unknown Client',
-        serviceName: booking.serviceName || 'Unknown Service',
-        date: booking.selectedDate || booking.date || booking.createdAt,
-        time: booking.selectedTimeSlot || booking.time || 'TBD',
-        status: booking.status || 'pending',
-        value: booking.price || booking.totalAmount || 0,
-        urgency: booking.urgencyLevel || 'medium',
-        createdAt: booking.createdAt
-      }));
-
-      console.log(`[Dashboard Controller] Found ${formattedBookings.length} recent bookings`);
-      
       res.json({
         status: 'success',
-        data: formattedBookings
+        data: bookingsWithClients
       });
 
     } catch (error) {
-      console.error('[Dashboard Controller] Error fetching recent bookings:', error);
+      console.error('[Dashboard Controller] Error fetching bookings with clients:', error);
       res.status(500).json({
         status: 'error',
-        message: 'Failed to fetch recent bookings',
+        message: 'Failed to fetch recent bookings with client data',
         error: error.message
       });
     }
@@ -281,6 +365,52 @@ const dashboardController = {
       res.status(500).json({
         status: 'error',
         message: 'Failed to fetch service popularity',
+        error: error.message
+      });
+    }
+  },
+
+  // GET /api/dashboard/clients - NEW METHOD FOR DIRECT CLIENT ACCESS
+  getClients: async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit) || 50;
+      console.log(`[Dashboard Controller] Fetching ${limit} clients directly from clients collection...`);
+
+      const clients = await Client.find()
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+
+      const formattedClients = clients.map(client => ({
+        _id: client._id,
+        id: client._id.toString(),
+        name: `${client.firstName} ${client.lastName}`.trim(),
+        firstName: client.firstName,
+        lastName: client.lastName,
+        email: client.email,
+        phone: client.phone,
+        preferredContactMethod: client.preferredContactMethod,
+        caseType: client.caseType,
+        estimatedLoss: client.estimatedLoss || 0,
+        urgencyLevel: client.urgencyLevel,
+        status: 'active', // Default status
+        createdAt: client.createdAt,
+        lastActivity: client.lastActivity,
+        notes: client.notes
+      }));
+
+      console.log(`[Dashboard Controller] Found ${formattedClients.length} clients directly from collection`);
+
+      res.json({
+        status: 'success',
+        data: formattedClients
+      });
+
+    } catch (error) {
+      console.error('[Dashboard Controller] Error fetching clients:', error);
+      res.status(500).json({
+        status: 'error',
+        message: 'Failed to fetch clients',
         error: error.message
       });
     }

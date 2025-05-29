@@ -24,24 +24,8 @@ router.get('/analytics/service-popularity', dashboardController.getServicePopula
  * Additional dashboard routes
  */
 
-// GET /api/dashboard/clients - Fetches clients data directly
-router.get('/clients', async (req, res) => {
-  try {
-    const Client = require('../models/Client');
-    const clients = await Client.find().limit(parseInt(req.query.limit) || 20).lean();
-    res.json({
-      status: 'success',
-      data: clients
-    });
-  } catch (error) {
-    console.error('[Dashboard Routes] Error fetching clients:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch clients for dashboard',
-      error: error.message
-    });
-  }
-});
+// GET /api/dashboard/clients - Controller-based clients data with population
+router.get('/clients', dashboardController.getClients);
 
 // GET /api/dashboard/stream - Server-Sent Events endpoint
 router.get('/stream', (req, res) => {
