@@ -59,6 +59,7 @@ const waitlistRoutes = require('./routes/waitlistRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const testRoutes = require('./routes/testRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const googleAdsRoutes = require('./routes/googleAdsRoutes');
 
 // Import error handlers
 const { errorHandler, notFound } = require('./middleware/errorMiddleware');
@@ -262,6 +263,7 @@ app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/google-ads', googleAdsRoutes);
 
 // Cache clear route (admin only)
 const { protect, restrictTo } = require('./middleware/authMiddleware');
