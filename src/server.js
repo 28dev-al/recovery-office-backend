@@ -116,7 +116,8 @@ const corsOptions = {
     'Access-Control-Request-Method',
     'Access-Control-Request-Headers',
     'X-API-Key',
-    'X-Request-Source'
+    'X-Request-Source',
+    'X-Client-Version'
   ],
   exposedHeaders: [
     'Content-Length',
@@ -141,7 +142,7 @@ app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
   res.header('Access-Control-Allow-Headers', 
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Access-Control-Request-Method, Access-Control-Request-Headers, X-API-Key, X-Request-Source');
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Access-Control-Request-Method, Access-Control-Request-Headers, X-API-Key, X-Request-Source, X-Client-Version');
   res.header('Access-Control-Max-Age', '86400');
   
   console.log(`[CORS] ✅ Preflight response sent for ${req.path}`);
@@ -168,7 +169,7 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD');
   res.header('Access-Control-Allow-Headers', 
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Access-Control-Request-Method, Access-Control-Request-Headers, X-API-Key, X-Request-Source');
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Access-Control-Request-Method, Access-Control-Request-Headers, X-API-Key, X-Request-Source, X-Client-Version');
   
   next();
 });
